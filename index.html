@@ -2165,7 +2165,8 @@ setTimeout(initLogin, 800);
 <!-- SERVICE WORKER REGISTRATION -->
 <script>
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('sw.js').catch(e=>console.warn('SW:',e));
+  navigator.serviceWorker.register('/echo-przodkow/sw.js', { scope: '/echo-przodkow/' })
+    .catch(e => console.warn('SW:', e));
 }
 </script>
 </body>
