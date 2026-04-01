@@ -255,6 +255,8 @@ body::after{content:'';position:fixed;inset:0;background:url("data:image/svg+xml
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:rgba(200,168,75,.25);border-radius:2px}
 
+#day-tabs::-webkit-scrollbar{display:none}
+
 @media(min-width:600px){.page{padding:18px 22px}}
 </style>
 </head>
@@ -328,13 +330,27 @@ body::after{content:'';position:fixed;inset:0;background:url("data:image/svg+xml
 
     <!-- PLAN DNIA -->
     <div class="page active" id="page-plan">
-      <div class="sh">
-        <div class="st">📅 Plan Dnia</div>
-        <div style="display:flex;gap:6px" id="plan-btns"></div>
+      <!-- DAY SELECTOR -->
+      <div id="day-selector" style="margin-bottom:14px">
+        <!-- kalendarz dni obozu -->
+        <div style="display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:4px" id="day-tabs"></div>
       </div>
-      <div id="plan-date" style="font-size:12px;color:var(--ash);margin-bottom:14px;font-style:italic"></div>
-      <div class="tl" id="plan-list">
-        <div class="empty"><div class="empty-icon">🌙</div><div class="empty-text">Brak zajęć w planie dnia.</div></div>
+      <!-- DAY HEADER -->
+      <div id="day-header" style="margin-bottom:14px"></div>
+      <!-- ACTIONS BAR -->
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px" id="plan-btns"></div>
+      <!-- VIEW TOGGLE (wychowawca) -->
+      <div id="plan-view-toggle" style="display:none;margin-bottom:12px">
+        <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;width:fit-content">
+          <button id="vtbtn-mine" onclick="setPlanView('mine')"
+            style="padding:6px 14px;font-family:'Cinzel',serif;font-size:11px;border:none;cursor:pointer;background:rgba(200,168,75,.15);color:var(--gold)">Mój zastęp</button>
+          <button id="vtbtn-all" onclick="setPlanView('all')"
+            style="padding:6px 14px;font-family:'Cinzel',serif;font-size:11px;border:none;cursor:pointer;background:transparent;color:var(--ash)">Cały obóz</button>
+        </div>
+      </div>
+      <!-- PLAN LIST -->
+      <div id="plan-list">
+        <div class="empty"><div class="empty-icon">🌙</div><div class="empty-text">Wybierz dzień obozu.</div></div>
       </div>
     </div>
 
@@ -385,30 +401,36 @@ body::after{content:'';position:fixed;inset:0;background:url("data:image/svg+xml
 
 <!-- ══════════ MODALS ══════════ -->
 
-<!-- PLAN: ADD/EDIT -->
+<!-- MODAL: ADD/EDIT ACTIVITY -->
 <div class="overlay" id="m-plan">
   <div class="modal">
     <div class="mhandle"></div>
     <div class="mtitle" id="m-plan-title">📅 Zajęcia</div>
     <input type="hidden" id="plan-edit-id">
+    <input type="hidden" id="plan-day-id">
     <div class="fr">
       <div class="fg"><label>Godzina</label><input type="time" id="plan-time" class="fi"></div>
-      <div class="fg"><label>Dla kogo</label>
-        <select id="plan-for" class="fi" onchange="planForChange()">
-          <option value="all">Cały obóz</option>
-          <option value="group">Zastęp</option>
+      <div class="fg"><label>Typ zajęć</label>
+        <select id="plan-typ" class="fi" onchange="planTypChange()">
+          <option value="stala">🔁 Stały punkt dnia</option>
+          <option value="blok">🎯 Blok zajęciowy</option>
+          <option value="wycieczka-punkt">🗺️ Punkt wycieczki</option>
+          <option value="inne">📌 Inne</option>
         </select>
       </div>
     </div>
-    <div class="fg"><label>Nazwa aktywności</label><input type="text" id="plan-name" class="fi" placeholder="np. Apel poranny…"></div>
-    <div class="fg"><label>Prowadzący</label>
-      <select id="plan-lead" class="fi"><option value="">— brak / wpisz ręcznie —</option></select>
+    <div class="fg"><label>Nazwa aktywności</label><input type="text" id="plan-name" class="fi" placeholder="np. Apel poranny, Leśny Tropiciel…"></div>
+    <div class="fg" id="plan-zastepy-wrap">
+      <label>Zastępy (możesz wybrać kilka)</label>
+      <div id="plan-zastepy-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px"></div>
+      <div style="font-size:11px;color:var(--ash);margin-top:4px">Brak zaznaczenia = cały obóz</div>
+    </div>
+    <div class="fg" id="plan-lead-wrap">
+      <label>Prowadzący (możesz wybrać kilku)</label>
+      <div id="plan-lead-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px"></div>
     </div>
     <div class="fg"><label>Lub wpisz prowadzącego ręcznie</label><input type="text" id="plan-lead-manual" class="fi" placeholder="imię / nick…"></div>
     <div class="fg"><label>Opis / uwagi</label><textarea id="plan-desc" class="fi" placeholder="miejsce, co zabrać…"></textarea></div>
-    <div class="fg" id="plan-group-wrap"><label>Zastęp</label>
-      <select id="plan-group" class="fi"><option value="">— wybierz —</option></select>
-    </div>
     <div class="btn-row">
       <button class="btn-cancel" onclick="closeModal('m-plan')">Anuluj</button>
       <button class="btn-save" onclick="savePlan()">Zapisz 📅</button>
@@ -416,7 +438,39 @@ body::after{content:'';position:fixed;inset:0;background:url("data:image/svg+xml
   </div>
 </div>
 
-<!-- PLAN: DETAIL -->
+<!-- MODAL: ADD DAY -->
+<div class="overlay" id="m-addday">
+  <div class="modal">
+    <div class="mhandle"></div>
+    <div class="mtitle" id="m-addday-title">📆 Dzień obozu</div>
+    <input type="hidden" id="day-edit-id">
+    <div class="fr">
+      <div class="fg"><label>Data</label><input type="date" id="day-data" class="fi"></div>
+      <div class="fg"><label>Typ dnia</label>
+        <select id="day-typ" class="fi" onchange="dayTypChange()">
+          <option value="normalny">☀️ Normalny</option>
+          <option value="wycieczka">🗺️ Wycieczka</option>
+          <option value="wolny">🌿 Dzień wolny</option>
+          <option value="przyjazd">🚌 Przyjazd</option>
+          <option value="wyjazd">🚌 Wyjazd</option>
+        </select>
+      </div>
+    </div>
+    <div class="fg"><label>Nazwa / hasło dnia</label><input type="text" id="day-nazwa" class="fi" placeholder="np. Dzień Swaroga, Wycieczka do Łęczycy…"></div>
+    <div class="fg" id="day-dest-wrap" style="display:none"><label>Cel wycieczki</label><input type="text" id="day-dest" class="fi" placeholder="np. Zamek w Łęczycy"></div>
+    <div class="fg"><label>Uwagi do dnia</label><textarea id="day-uwagi" class="fi" placeholder="Ważne informacje dla kadry…"></textarea></div>
+    <div class="fg" id="day-copy-wrap">
+      <label>Skopiuj plan z dnia (opcjonalnie)</label>
+      <select id="day-copy-from" class="fi"><option value="">— zacznij od zera —</option></select>
+    </div>
+    <div class="btn-row">
+      <button class="btn-cancel" onclick="closeModal('m-addday')">Anuluj</button>
+      <button class="btn-save" onclick="saveDay()">Zapisz dzień 📆</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: PLAN DETAIL -->
 <div class="overlay" id="m-plan-detail">
   <div class="modal">
     <div class="mhandle"></div>
@@ -690,7 +744,7 @@ const CAT_META = {
 
 // ── STATE ──
 let currentUser = null;
-let state = { users:{}, groups:{}, participants:{}, plan:{}, reminders:{}, documents:{}, notifications:{} };
+let state = { users:{}, groups:{}, participants:{}, plan:{}, reminders:{}, documents:{}, notifications:{}, dni:{}, aktywnosci:{} };
 let listeners = [];
 let activeDocCat = null;
 let activeGrpFilter = null;
@@ -804,7 +858,37 @@ async function seedIfEmpty(){
     d5:{title:'Instrukcja – codzienna rutyna poranna',category:'instrukcja',access:'all',body:`CODZIENNA RUTYNA PORANNA\n\n6:30 POBUDKA\nOceniasz stan zdrowia zastępu.\nChory → do pielęgniarki PRZED ćwiczeniami.\n\n6:45 GIMNASTYKA\nZbiórka przy maszcie, prowadzi zastęp dyżurny.\n\n7:00 TOALETA I PORZĄDKI\nKontrola czystości szałasu (arkusz).\n\n7:50 ZBIÓRKA PRZED STOŁÓWKĄ\nSprawdzenie stanu osobowego.\n\n8:00 ŚNIADANIE\nUczestnicy z dietą specjalną → właściwy posiłek.\nLeki poranne wg przypomnień w aplikacji.\n\n8:45 APEL PORANNY\nProwadzi komendant lub wyznaczona osoba.\n\n⚠ Nigdy nie zostawiaj zastępu bez opieki.`,added:'2026-06-29',addedBy:'Wojtek Malesa'},
   };
 
+  const seedDni = {
+    dn1:{data:'2026-08-05',typ:'przyjazd',nazwa:'Dzień Przybycia',dest:'',uwagi:'Przyjazd do godziny 16:00. Zakwaterowanie, orientacja na terenie.',ts:Date.now()},
+    dn2:{data:'2026-08-06',typ:'normalny',nazwa:'Czas Swaroga – Bóg Ognia',dest:'',uwagi:'Pierwszy pełny dzień. Warsztaty tematyczne.',ts:Date.now()},
+    dn3:{data:'2026-08-07',typ:'wycieczka',nazwa:'Wycieczka do Łęczycy',dest:'Zamek Królewski w Łęczycy',uwagi:'Wyjazd autokarem. Zabrać lunch i wodę.',ts:Date.now()},
+  };
+  const seedAkt = {
+    a1:{data:'2026-08-05',czas:'16:00',nazwa:'Przyjazd i zakwaterowanie',typ:'stala',zastepy:[],prowadzacy:['u1'],prowadzacyManual:'',opis:'Wszystkie grupy',done:false,ts:1},
+    a2:{data:'2026-08-05',czas:'20:00',nazwa:'Kolacja i ognisko powitalne',typ:'stala',zastepy:[],prowadzacy:['u1','u5'],prowadzacyManual:'',opis:'Krąg ogniskowy – legenda o powstaniu obozu',done:false,ts:2},
+    a3:{data:'2026-08-05',czas:'22:00',nazwa:'Cisza nocna',typ:'stala',zastepy:[],prowadzacy:[],prowadzacyManual:'',opis:'',done:false,ts:3},
+    a4:{data:'2026-08-06',czas:'07:00',nazwa:'Pobudka i gimnastyka poranna',typ:'stala',zastepy:[],prowadzacy:[],prowadzacyManual:'zastęp dyżurny',opis:'Zbiórka przy maszcie',done:false,ts:4},
+    a5:{data:'2026-08-06',czas:'08:00',nazwa:'Śniadanie',typ:'stala',zastepy:[],prowadzacy:[],prowadzacyManual:'',opis:'Stołówka – grupy wg kolejności',done:false,ts:5},
+    a6:{data:'2026-08-06',czas:'09:30',nazwa:'Leśny Tropiciel – orientacja w terenie',typ:'blok',zastepy:['g1','g2'],prowadzacy:['u2','u3'],prowadzacyManual:'',opis:'Las za polaną. Zabrać notatniki i kompas.',done:false,ts:6},
+    a7:{data:'2026-08-06',czas:'09:30',nazwa:'Warsztaty garncarskie',typ:'blok',zastepy:['g3'],prowadzacy:['u4'],prowadzacyManual:'',opis:'Przy stołówce – glina jest przygotowana',done:false,ts:7},
+    a8:{data:'2026-08-06',czas:'12:30',nazwa:'Obiad',typ:'stala',zastepy:[],prowadzacy:[],prowadzacyManual:'',opis:'',done:false,ts:8},
+    a9:{data:'2026-08-06',czas:'14:00',nazwa:'Kąpiel i czas wolny',typ:'stala',zastepy:[],prowadzacy:['u5'],prowadzacyManual:'',opis:'Jeziorko – tylko pływacy samodzielni bez opaski',done:false,ts:9},
+    a10:{data:'2026-08-06',czas:'17:00',nazwa:'Warsztaty mitologii słowiańskiej',typ:'blok',zastepy:[],prowadzacy:['u1','u2','u3'],prowadzacyManual:'',opis:'Amfiteatr – cała kadra prowadzi stacje',done:false,ts:10},
+    a11:{data:'2026-08-06',czas:'20:00',nazwa:'Kolacja',typ:'stala',zastepy:[],prowadzacy:[],prowadzacyManual:'',opis:'',done:false,ts:11},
+    a12:{data:'2026-08-06',czas:'21:00',nazwa:'Ognisko wieczorne',typ:'stala',zastepy:[],prowadzacy:['u2'],prowadzacyManual:'',opis:'Pieśni i opowieści',done:false,ts:12},
+    a13:{data:'2026-08-06',czas:'22:00',nazwa:'Cisza nocna',typ:'stala',zastepy:[],prowadzacy:[],prowadzacyManual:'',opis:'',done:false,ts:13},
+    a14:{data:'2026-08-07',czas:'06:30',nazwa:'Pobudka',typ:'stala',zastepy:[],prowadzacy:[],prowadzacyManual:'',opis:'Wczesna pobudka z uwagi na wyjazd',done:false,ts:14},
+    a15:{data:'2026-08-07',czas:'07:00',nazwa:'Śniadanie i przygotowanie do wyjazdu',typ:'wycieczka-punkt',zastepy:[],prowadzacy:[],prowadzacyManual:'',opis:'Spakować lunch, wodę, dokumenty uczestnika',done:false,ts:15},
+    a16:{data:'2026-08-07',czas:'08:00',nazwa:'Wyjazd autokarem',typ:'wycieczka-punkt',zastepy:[],prowadzacy:['u1','u5'],prowadzacyManual:'',opis:'Zbiórka przy bramie obozu punktualnie o 7:55',done:false,ts:16},
+    a17:{data:'2026-08-07',czas:'10:00',nazwa:'Zwiedzanie Zamku Królewskiego',typ:'wycieczka-punkt',zastepy:[],prowadzacy:['u1'],prowadzacyManual:'przewodnik muzealny',opis:'',done:false,ts:17},
+    a18:{data:'2026-08-07',czas:'13:00',nazwa:'Obiad w terenie',typ:'wycieczka-punkt',zastepy:[],prowadzacy:[],prowadzacyManual:'',opis:'Lunch z plecaków',done:false,ts:18},
+    a19:{data:'2026-08-07',czas:'15:00',nazwa:'Czas wolny w mieście',typ:'wycieczka-punkt',zastepy:[],prowadzacy:['u2','u3','u4'],prowadzacyManual:'',opis:'Grupy po 5-6 osób z wychowawcą. Zbiórka o 16:30.',done:false,ts:19},
+    a20:{data:'2026-08-07',czas:'17:00',nazwa:'Powrót autokarem',typ:'wycieczka-punkt',zastepy:[],prowadzacy:['u1','u5'],prowadzacyManual:'',opis:'',done:false,ts:20},
+    a21:{data:'2026-08-07',czas:'19:00',nazwa:'Kolacja i cisza nocna',typ:'stala',zastepy:[],prowadzacy:[],prowadzacyManual:'',opis:'Wcześniejsza cisza – 21:30 z uwagi na zmęczenie',done:false,ts:21},
+  };
   await set(ref(db,'users'), seedUsers);
+  await set(ref(db,'dni'), seedDni);
+  await set(ref(db,'aktywnosci'), seedAkt);
   await set(ref(db,'groups'), seedGroups);
   await set(ref(db,'participants'), seedParticipants);
   await set(ref(db,'plan'), seedPlan);
@@ -815,7 +899,7 @@ async function seedIfEmpty(){
 
 // ── REALTIME LISTENERS ──
 function attachListeners(){
-  const paths = ['users','groups','participants','plan','reminders','documents','notifications'];
+  const paths = ['users','groups','participants','plan','reminders','documents','notifications','dni','aktywnosci'];
   paths.forEach(path => {
     const unsub = onValue(ref(db, path), snap => {
       state[path] = snap.val() || {};
@@ -834,7 +918,9 @@ function onStateChange(path){
   hideSync();
   const active = document.querySelector('.page.active');
   const tab = active?.id?.replace('page-','');
-  if(path==='plan' && tab==='plan') renderPlan();
+  if(path==='plan'&&tab==='plan') renderPlan();
+  if(path==='dni'&&tab==='plan') renderPlan();
+  if(path==='aktywnosci'&&tab==='plan') renderPlan();
   if(path==='reminders' && (tab==='rem'||tab==='plan')) { renderRem(); updateBadges(); }
   if(path==='participants' && tab==='uczestnicy') renderParts();
   if(path==='documents' && tab==='docs') renderDocs();
@@ -905,13 +991,6 @@ function initApp(){
   if(u.role==='komendant') show('tab-admin','flex');
   else hide('tab-admin');
 
-  // plan btns
-  const pb = $('plan-btns');
-  pb.innerHTML = '';
-  if(can('editPlan')){
-    pb.innerHTML = `<button class="btn-sm" onclick="openAddPlan()">+ Dodaj</button>`;
-  }
-
   // part btns
   const partb = $('part-btns');
   partb.innerHTML = '';
@@ -924,7 +1003,7 @@ function initApp(){
   if(can('editDocs')) show('add-doc-btn');
   else hide('add-doc-btn');
 
-  $('plan-date').textContent = fmtNow();
+  // plan btns rendered inside renderPlan()
   populateSelects();
   renderPlan(); renderRem(); renderParts(); renderDocs();
   if(u.role==='komendant') renderAdmin();
@@ -983,135 +1062,513 @@ window.switchTab = function(id){
   if(id==='admin') renderAdmin();
 }
 
-// ── PLAN DNIA ──
-function renderPlan(){
-  const cur = nowMins();
-  let items = Object.entries(state.plan||{});
-  // filter for non-admin
-  if(!can('seeAll')){
-    items = items.filter(([,p]) => p.for==='all' || p.group===myGroup());
-  }
-  items.sort((a,b)=>a[1].time?.localeCompare(b[1].time));
+// ── PLAN DNIA – MULTI-DAY ──
+const CAMP_START = new Date('2026-08-05');
+const CAMP_END   = new Date('2026-08-14');
+const DAY_TYPS = {
+  normalny:   {icon:'☀️', label:'Normalny'},
+  wycieczka:  {icon:'🗺️', label:'Wycieczka'},
+  wolny:      {icon:'🌿', label:'Wolny'},
+  przyjazd:   {icon:'🚌', label:'Przyjazd'},
+  wyjazd:     {icon:'🚌', label:'Wyjazd'},
+};
+const ACT_TYPS = {
+  stala:          {icon:'🔁', label:'Stały punkt'},
+  blok:           {icon:'🎯', label:'Blok zajęciowy'},
+  'wycieczka-punkt': {icon:'🗺️', label:'Punkt wycieczki'},
+  inne:           {icon:'📌', label:'Inne'},
+};
 
-  const cont = $('plan-list');
-  if(!items.length){
-    cont.innerHTML='<div class="empty"><div class="empty-icon">🌙</div><div class="empty-text">Brak zajęć w planie dnia.</div></div>';
-    return;
+let currentDayId = null;
+let planView = 'mine'; // 'mine' | 'all'
+
+function campDays(){
+  const days=[];
+  const d=new Date(CAMP_START);
+  while(d<=CAMP_END){ days.push(d.toISOString().slice(0,10)); d.setDate(d.getDate()+1); }
+  return days;
+}
+
+function fmtDate(iso){
+  const d=new Date(iso+'T12:00:00');
+  return d.toLocaleDateString('pl-PL',{weekday:'short',day:'numeric',month:'short'});
+}
+function fmtDateLong(iso){
+  const d=new Date(iso+'T12:00:00');
+  return d.toLocaleDateString('pl-PL',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+}
+function dayNumber(iso){
+  const s=new Date(CAMP_START); const t=new Date(iso+'T12:00:00');
+  return Math.round((t-s)/(1000*60*60*24))+1;
+}
+
+function renderDayTabs(){
+  const cont=$('day-tabs');
+  if(!cont) return;
+  const days=campDays();
+  // find today or default to first day
+  const todayIso=new Date().toISOString().slice(0,10);
+  if(!currentDayId){
+    // pick today if in camp, else first day
+    const inCamp=days.includes(todayIso);
+    currentDayId = inCamp ? findDayIdByDate(todayIso)||days[0] : days[0];
   }
   cont.innerHTML='';
-  items.forEach(([pid,p])=>{
-    const pm = timeMins(p.time);
-    const diff = pm - cur;
-    const isNow = diff>=0&&diff<=30;
-    const isDone = p.done||diff<-45;
-    const grpN = p.group ? (state.groups[p.group]?.icon+' '+state.groups[p.group]?.name)||'' : '';
-    const leadDisplay = p.lead ? staffName(p.lead) : (p.leadManual||'');
-
-    const div = document.createElement('div');
-    div.className = `tli${isNow?' now':''}${isDone?' done':''}`;
-    div.innerHTML=`<div class="tli-dot"></div>
-      <div class="tl-card${isDone?' done':''}" onclick="openPlanDetail('${pid}')">
-        <div class="tl-time">${p.time}${isNow?' — TERAZ ▶':''}</div>
-        <div class="tl-name">${isDone?'✓ ':''}${p.name}</div>
-        ${leadDisplay?`<div class="tl-lead">👤 ${leadDisplay}</div>`:''}
-        ${p.desc?`<div class="tl-desc">${p.desc}</div>`:''}
-        <div class="tags">
-          ${p.for==='all'?'<span class="tag tag-all">Cały obóz</span>':''}
-          ${grpN?`<span class="tag tag-grp">${grpN}</span>`:''}
-          ${isNow?'<span class="tag tag-now">🔔 Czas zacząć!</span>':''}
-        </div>
-      </div>`;
-    cont.appendChild(div);
+  days.forEach(iso=>{
+    const dayEntry=findDayByDate(iso);
+    const typ=dayEntry?.typ||'normalny';
+    const meta=DAY_TYPS[typ]||DAY_TYPS.normalny;
+    const num=dayNumber(iso);
+    const isCurrent=currentDayId===iso||(dayEntry&&currentDayId===Object.keys(state.dni||{}).find(k=>state.dni[k].data===iso));
+    const btn=document.createElement('button');
+    btn.style.cssText=`flex-shrink:0;padding:8px 12px;border-radius:10px;border:1px solid ${isCurrent?'var(--gold)':'var(--border)'};background:${isCurrent?'rgba(200,168,75,.15)':'transparent'};cursor:pointer;font-family:'Cinzel',serif;font-size:10px;color:${isCurrent?'var(--gold)':'var(--ash)'};text-align:center;min-width:56px;transition:.2s`;
+    const d=new Date(iso+'T12:00:00');
+    btn.innerHTML=`<div style="font-size:16px">${meta.icon}</div><div>D${num}</div><div style="font-size:9px">${d.toLocaleDateString('pl-PL',{day:'numeric',month:'numeric'})}</div>`;
+    btn.onclick=()=>selectDay(iso);
+    cont.appendChild(btn);
   });
 }
 
-window.openAddPlan = function(editId=null){
-  $('plan-edit-id').value = editId||'';
-  $('m-plan-title').textContent = editId ? '✏️ Edytuj zajęcia' : '📅 Nowe zajęcia';
-  if(editId){
-    const p = state.plan[editId];
-    $('plan-time').value=p.time||'';
-    $('plan-for').value=p.for||'all';
-    $('plan-name').value=p.name||'';
-    $('plan-lead').value=p.lead||'';
-    $('plan-lead-manual').value=p.leadManual||'';
-    $('plan-desc').value=p.desc||'';
-    $('plan-group').value=p.group||'';
-  } else {
-    const n=new Date();
-    $('plan-time').value=`${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
-    $('plan-for').value='all';
-    $('plan-name').value='';
-    $('plan-lead').value='';
-    $('plan-lead-manual').value='';
-    $('plan-desc').value='';
-    $('plan-group').value='';
-  }
-  planForChange();
-  openModal('m-plan');
+function findDayByDate(iso){
+  return Object.values(state.dni||{}).find(d=>d.data===iso);
+}
+function findDayIdByDate(iso){
+  return Object.keys(state.dni||{}).find(k=>(state.dni[k].data===iso));
 }
 
-window.planForChange = function(){
-  const v=$('plan-for').value;
-  $('plan-group-wrap').style.display = v==='group'?'block':'none';
+function selectDay(iso){
+  // currentDayId stores the iso date string for simplicity in selection
+  currentDayId=iso;
+  renderDayTabs();
+  renderDayHeader();
+  renderPlan();
 }
 
-window.savePlan = async function(){
-  const name=$('plan-name').value.trim();
-  const time=$('plan-time').value;
-  if(!name||!time){alert('Podaj godzinę i nazwę.');return;}
-  const editId=$('plan-edit-id').value;
-  showSync();
-  const data = {
-    time, name, desc:$('plan-desc').value.trim(),
-    for:$('plan-for').value,
-    group:$('plan-group').value||null,
-    lead:$('plan-lead').value||null,
-    leadManual:$('plan-lead-manual').value.trim(),
-    done: editId ? (state.plan[editId]?.done||false) : false,
-    ts: Date.now()
-  };
-  if(editId) await update(ref(db,`plan/${editId}`),data);
-  else await push(ref(db,'plan'),data);
-  closeModal('m-plan');
-  addNotif('📅 Plan dnia', `${editId?'Zmieniono':'Dodano'}: ${name} o ${time}`);
-}
-
-window.openPlanDetail = function(pid){
-  const p = state.plan[pid];
-  if(!p) return;
-  const grpN = p.group?(state.groups[p.group]?.icon+' '+state.groups[p.group]?.name)||'':'';
-  const leadDisplay = p.lead?staffName(p.lead):(p.leadManual||'');
-  $('plan-detail-content').innerHTML=`
-    <div class="mtitle">${p.time} · ${p.name}</div>
-    ${leadDisplay?`<div style="font-size:14px;color:var(--leaf);margin-bottom:8px">👤 Prowadzący: ${leadDisplay}</div>`:''}
-    ${grpN?`<div style="font-size:13px;color:var(--smoke);margin-bottom:6px">${grpN}</div>`:''}
-    ${p.desc?`<div style="font-size:15px;color:var(--parchment);line-height:1.6;margin-top:8px;border-top:1px solid var(--border);padding-top:10px">${p.desc}</div>`:''}
-    <div style="margin-top:14px;display:flex;gap:8px;align-items:center">
-      <label style="font-size:13px;color:var(--ash)">Status:</label>
-      <button class="btn-sm ${p.done?'ghost':''}" onclick="togglePlanDone('${pid}')">${p.done?'↩ Oznacz jako niewykonane':'✓ Oznacz jako wykonane'}</button>
+function renderDayHeader(){
+  const cont=$('day-header'); if(!cont) return;
+  const iso=currentDayId;
+  if(!iso){cont.innerHTML='';return;}
+  const dayEntry=findDayByDate(iso);
+  const typ=dayEntry?.typ||'normalny';
+  const meta=DAY_TYPS[typ]||DAY_TYPS.normalny;
+  const num=dayNumber(iso);
+  const nazwa=dayEntry?.nazwa||'';
+  const uwagi=dayEntry?.uwagi||'';
+  const dest=dayEntry?.dest||'';
+  cont.innerHTML=`
+    <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px;position:relative;overflow:hidden">
+      <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--gold);opacity:.6"></div>
+      <div style="display:flex;align-items:center;gap:10px;justify-content:space-between">
+        <div>
+          <div style="font-family:'Cinzel',serif;font-size:13px;color:var(--gold);letter-spacing:.05em">
+            ${meta.icon} Dzień ${num} · ${meta.label}
+          </div>
+          <div style="font-size:16px;color:var(--parchment);font-weight:600;margin-top:2px">${nazwa||fmtDateLong(iso)}</div>
+          <div style="font-size:12px;color:var(--ash);margin-top:2px">${fmtDateLong(iso)}</div>
+          ${dest?`<div style="font-size:13px;color:var(--leaf);margin-top:3px">📍 ${dest}</div>`:''}
+          ${uwagi?`<div style="font-size:13px;color:var(--smoke);font-style:italic;margin-top:4px">${uwagi}</div>`:''}
+        </div>
+        ${can('editPlan')?`<button class="btn-sm ghost" style="flex-shrink:0" onclick="openEditDay('${iso}')">✏️</button>`:''}
+      </div>
     </div>`;
+}
+
+function setPlanView(v){
+  planView=v;
+  $('vtbtn-mine').style.background=v==='mine'?'rgba(200,168,75,.15)':'transparent';
+  $('vtbtn-mine').style.color=v==='mine'?'var(--gold)':'var(--ash)';
+  $('vtbtn-all').style.background=v==='all'?'rgba(200,168,75,.15)':'transparent';
+  $('vtbtn-all').style.color=v==='all'?'var(--gold)':'var(--ash)';
+  renderPlan();
+}
+
+function renderPlan(){
+  renderDayTabs();
+  renderDayHeader();
+
+  const iso=currentDayId;
+  const cont=$('plan-list');
+
+  // plan-btns
+  const pb=$('plan-btns'); pb.innerHTML='';
+  if(can('editPlan')){
+    if(!findDayByDate(iso||'')){
+      pb.innerHTML=`<button class="btn-sm" onclick="openAddDay()">+ Dodaj dzień obozu</button>`;
+    } else {
+      pb.innerHTML=`<button class="btn-sm" onclick="openAddActivity()">+ Zajęcia</button>
+        <button class="btn-sm ghost" onclick="openAddDay()">+ Nowy dzień</button>
+        <button class="btn-sm ghost" onclick="openCopyDay()">📋 Kopiuj dzień</button>`;
+    }
+  }
+
+  // view toggle
+  const vt=$('plan-view-toggle');
+  if(!can('seeAll') && currentUser.role!=='skarbnik'){
+    vt.style.display='block';
+  } else { vt.style.display='none'; }
+
+  if(!iso){
+    cont.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-text">Wybierz dzień z kalendarza powyżej.</div></div>';
+    return;
+  }
+
+  // get activities for this day
+  let acts=Object.entries(state.aktywnosci||{})
+    .filter(([,a])=>a.data===iso);
+
+  // filter by view
+  if(!can('seeAll') && planView==='mine' && myGroup()){
+    // show: all-camp items + items that include myGroup
+    acts=acts.filter(([,a])=>{
+      const zastepy=a.zastepy||[];
+      return zastepy.length===0 || zastepy.includes(myGroup());
+    });
+  }
+
+  acts.sort((a,b)=>a[1].czas?.localeCompare(b[1].czas));
+
+  if(!acts.length){
+    cont.innerHTML='<div class="empty"><div class="empty-icon">🌙</div><div class="empty-text">Brak zajęć w tym dniu.<br>'+(can('editPlan')?'Dodaj zajęcia przyciskiem powyżej.':'')+'</div></div>';
+    return;
+  }
+
+  const cur=nowMins();
+  const todayIso=new Date().toISOString().slice(0,10);
+  const isToday=iso===todayIso;
+
+  // group by time slot (parallel activities = same czas)
+  const slots={};
+  acts.forEach(([id,a])=>{
+    const key=a.czas||'00:00';
+    if(!slots[key]) slots[key]=[];
+    slots[key].push([id,a]);
+  });
+
+  cont.innerHTML='';
+  const tl=document.createElement('div'); tl.className='tl';
+  cont.appendChild(tl);
+
+  Object.entries(slots).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([czas,items])=>{
+    const pm=timeMins(czas);
+    const diff=pm-cur;
+    const isNow=isToday&&diff>=0&&diff<=30;
+    const isDoneAll=items.every(([,a])=>a.done);
+
+    if(items.length===1){
+      // single activity
+      const [aid,a]=items[0];
+      renderSingleActivity(tl,aid,a,isNow,isDoneAll,isToday);
+    } else {
+      // PARALLEL BLOCK
+      const blockDiv=document.createElement('div');
+      blockDiv.className=`tli${isNow?' now':''}`;
+      const myItems=items.filter(([,a])=>{
+        const z=a.zastepy||[];
+        return z.length===0||z.includes(myGroup());
+      });
+      const isMineInBlock=myItems.length>0;
+
+      blockDiv.innerHTML=`<div class="tli-dot${isNow?' ':' '}"></div>
+        <div style="flex:1">
+          <div style="font-family:'Cinzel',serif;font-size:11px;color:var(--amber);letter-spacing:.05em;margin-bottom:6px">
+            ${czas}${isNow?' — TERAZ ▶':''} · <span style="color:var(--ash)">BLOK RÓWNOLEGŁY (${items.length} grupy)</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px" id="block-${czas.replace(':','')}">
+          </div>
+        </div>`;
+      tl.appendChild(blockDiv);
+
+      const blockCont=blockDiv.querySelector(`#block-${czas.replace(':','')}`);
+      items.forEach(([aid,a])=>{
+        const zastepy=a.zastepy||[];
+        const isMine=zastepy.length===0||zastepy.includes(myGroup());
+        const leadNames=buildLeadNames(a);
+        const zNames=zastepy.map(z=>state.groups[z]?`${state.groups[z].icon} ${state.groups[z].name}`:'').join(', ')||'Cały obóz';
+        const actDiv=document.createElement('div');
+        actDiv.style.cssText=`background:${isMine?'rgba(28,46,28,.9)':'rgba(18,30,18,.5)'};border:1px solid ${isMine?'var(--border-h)':'var(--border)'};border-radius:9px;padding:10px 13px;cursor:pointer;opacity:${a.done?'0.45':'1'};transition:.2s`;
+        actDiv.innerHTML=`
+          <div style="display:flex;align-items:flex-start;gap:8px">
+            <div style="flex:1">
+              <div style="font-size:15px;color:${isMine?'var(--parchment)':'var(--smoke)'};font-weight:${isMine?'600':'400'}">${a.done?'✓ ':''}${a.nazwa}${isMine?'':''}</div>
+              <div style="font-size:12px;color:var(--leaf);margin-top:2px">${zNames}</div>
+              ${leadNames?`<div style="font-size:12px;color:var(--ash);margin-top:2px">👤 ${leadNames}</div>`:''}
+            </div>
+            ${isMine?`<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:rgba(200,168,75,.15);border:1px solid var(--border);color:var(--gold);font-family:'Cinzel',serif;white-space:nowrap">Mój zastęp</span>`:''}
+          </div>`;
+        actDiv.onclick=()=>openActDetail(aid);
+        blockCont.appendChild(actDiv);
+      });
+    }
+  });
+}
+
+function renderSingleActivity(cont,aid,a,isNow,isDone,isToday){
+  const zastepy=a.zastepy||[];
+  const isAll=zastepy.length===0;
+  const isMine=isAll||zastepy.includes(myGroup());
+  const leadNames=buildLeadNames(a);
+  const zNames=zastepy.map(z=>state.groups[z]?`${state.groups[z].icon} ${state.groups[z].name}`:'').join(', ')||'Cały obóz';
+  const typ=ACT_TYPS[a.typ]||ACT_TYPS.inne;
+
+  const div=document.createElement('div');
+  div.className=`tli${isNow?' now':''}${isDone?' done':''}`;
+  div.innerHTML=`<div class="tli-dot"></div>
+    <div class="tl-card${isDone?' done':''}" style="opacity:${!isMine&&!can('seeAll')?'.5':'1'}" onclick="openActDetail('${aid}')">
+      <div class="tl-time">${a.czas||''}${isNow?' — TERAZ ▶':''} <span style="color:var(--ash);font-size:10px">${typ.icon} ${typ.label}</span></div>
+      <div class="tl-name">${isDone?'✓ ':''}${a.nazwa}</div>
+      ${leadNames?`<div class="tl-lead">👤 ${leadNames}</div>`:''}
+      ${a.opis?`<div class="tl-desc">${a.opis}</div>`:''}
+      <div class="tags">
+        ${isAll?'<span class="tag tag-all">Cały obóz</span>':''}
+        ${!isAll?`<span class="tag tag-grp">${zNames}</span>`:''}
+        ${isNow?'<span class="tag tag-now">🔔 Czas zacząć!</span>':''}
+      </div>
+    </div>`;
+  cont.appendChild(div);
+}
+
+function buildLeadNames(a){
+  const leads=a.prowadzacy||[];
+  const names=leads.map(uid=>staffName(uid)).filter(Boolean);
+  if(a.prowadzacyManual) names.push(a.prowadzacyManual);
+  return names.join(', ');
+}
+
+window.openActDetail=function(aid){
+  const a=state.aktywnosci[aid]; if(!a) return;
+  const zastepy=a.zastepy||[];
+  const zNames=zastepy.map(z=>state.groups[z]?`${state.groups[z].icon} ${state.groups[z].name}`:'').join(', ')||'Cały obóz';
+  const leadNames=buildLeadNames(a);
+  const typ=ACT_TYPS[a.typ]||ACT_TYPS.inne;
+  $('plan-detail-content').innerHTML=`
+    <div class="mtitle">${typ.icon} ${a.czas} · ${a.nazwa}</div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+      <div style="display:flex;gap:8px">
+        <span style="font-size:12px;color:var(--ash);width:80px;flex-shrink:0">Zastępy:</span>
+        <span style="font-size:14px;color:var(--parchment)">${zNames}</span>
+      </div>
+      ${leadNames?`<div style="display:flex;gap:8px">
+        <span style="font-size:12px;color:var(--ash);width:80px;flex-shrink:0">Prowadzący:</span>
+        <span style="font-size:14px;color:var(--leaf)">${leadNames}</span>
+      </div>`:''}
+      ${a.opis?`<div style="display:flex;gap:8px">
+        <span style="font-size:12px;color:var(--ash);width:80px;flex-shrink:0">Opis:</span>
+        <span style="font-size:14px;color:var(--smoke);font-style:italic">${a.opis}</span>
+      </div>`:''}
+    </div>
+    <button class="btn-sm ${a.done?'ghost':''}" style="width:100%" onclick="toggleActDone('${aid}')">${a.done?'↩ Oznacz jako niewykonane':'✓ Oznacz jako wykonane'}</button>`;
   const btns=$('plan-detail-btns');
   btns.innerHTML=`<button class="btn-cancel" onclick="closeModal('m-plan-detail')">Zamknij</button>`;
   if(can('editPlan')){
-    btns.innerHTML+=`<button class="btn-save" onclick="closeModal('m-plan-detail');openAddPlan('${pid}')">✏️ Edytuj</button>`;
-    btns.innerHTML+=`<button class="btn-save red" onclick="deletePlan('${pid}')">🗑️</button>`;
+    btns.innerHTML+=`<button class="btn-save" onclick="closeModal('m-plan-detail');openEditActivity('${aid}')">✏️ Edytuj</button>`;
+    btns.innerHTML+=`<button class="btn-save red" onclick="deleteActivity('${aid}')">🗑️</button>`;
   }
   openModal('m-plan-detail');
 }
 
-window.togglePlanDone = async function(pid){
-  const p=state.plan[pid]; if(!p) return;
+window.toggleActDone=async function(aid){
+  const a=state.aktywnosci[aid]; if(!a) return;
   showSync();
-  await update(ref(db,`plan/${pid}`),{done:!p.done});
+  await update(ref(db,`aktywnosci/${aid}`),{done:!a.done});
   closeModal('m-plan-detail');
 }
 
-window.deletePlan = async function(pid){
-  if(!confirm('Usunąć to zajęcie?')) return;
+window.deleteActivity=async function(aid){
+  if(!confirm('Usunąć tę aktywność?')) return;
   showSync();
-  await remove(ref(db,`plan/${pid}`));
+  await remove(ref(db,`aktywnosci/${aid}`));
   closeModal('m-plan-detail');
+}
+
+// ADD / EDIT ACTIVITY
+window.openAddActivity=function(editId=null){
+  $('plan-edit-id').value=editId||'';
+  $('plan-day-id').value=currentDayId||'';
+  $('m-plan-title').textContent=editId?'✏️ Edytuj zajęcia':'📅 Nowe zajęcia';
+  if(editId){
+    const a=state.aktywnosci[editId];
+    $('plan-time').value=a.czas||'';
+    $('plan-typ').value=a.typ||'blok';
+    $('plan-name').value=a.nazwa||'';
+    $('plan-lead-manual').value=a.prowadzacyManual||'';
+    $('plan-desc').value=a.opis||'';
+    buildZastepyCheckboxes(a.zastepy||[]);
+    buildLeadCheckboxes(a.prowadzacy||[]);
+  } else {
+    const n=new Date();
+    $('plan-time').value=`${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
+    $('plan-typ').value='blok';
+    $('plan-name').value='';
+    $('plan-lead-manual').value='';
+    $('plan-desc').value='';
+    buildZastepyCheckboxes([]);
+    buildLeadCheckboxes([]);
+  }
+  planTypChange();
+  openModal('m-plan');
+}
+
+window.openEditActivity=function(id){openAddActivity(id)}
+
+function buildZastepyCheckboxes(selected){
+  const cont=$('plan-zastepy-list'); cont.innerHTML='';
+  Object.entries(state.groups||{}).forEach(([gid,g])=>{
+    const chk=document.createElement('label');
+    chk.style.cssText='display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:20px;border:1px solid var(--border);cursor:pointer;font-size:12px;font-family:"Cinzel",serif;color:var(--smoke);background:transparent;transition:.2s';
+    chk.innerHTML=`<input type="checkbox" value="${gid}" ${selected.includes(gid)?'checked':''} style="accent-color:var(--amber)"> ${g.icon} ${g.name}`;
+    chk.querySelector('input').onchange=e=>{
+      chk.style.background=e.target.checked?'rgba(200,168,75,.12)':'transparent';
+      chk.style.color=e.target.checked?'var(--gold)':'var(--smoke)';
+      chk.style.borderColor=e.target.checked?'var(--gold)':'var(--border)';
+    };
+    if(selected.includes(gid)){
+      chk.style.background='rgba(200,168,75,.12)'; chk.style.color='var(--gold)'; chk.style.borderColor='var(--gold)';
+    }
+    cont.appendChild(chk);
+  });
+}
+
+function buildLeadCheckboxes(selected){
+  const cont=$('plan-lead-list'); cont.innerHTML='';
+  Object.entries(state.users||{}).forEach(([uid,u])=>{
+    const nick=u.nick?` „${u.nick}"`:'';
+    const chk=document.createElement('label');
+    chk.style.cssText='display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:20px;border:1px solid var(--border);cursor:pointer;font-size:12px;font-family:"Cinzel",serif;color:var(--smoke);background:transparent;transition:.2s';
+    chk.innerHTML=`<input type="checkbox" value="${uid}" ${selected.includes(uid)?'checked':''} style="accent-color:var(--amber)"> ${u.name.split(' ')[0]}${nick}`;
+    chk.querySelector('input').onchange=e=>{
+      chk.style.background=e.target.checked?'rgba(122,182,72,.12)':'transparent';
+      chk.style.color=e.target.checked?'var(--leaf)':'var(--smoke)';
+      chk.style.borderColor=e.target.checked?'var(--leaf)':'var(--border)';
+    };
+    if(selected.includes(uid)){
+      chk.style.background='rgba(122,182,72,.12)'; chk.style.color='var(--leaf)'; chk.style.borderColor='var(--leaf)';
+    }
+    cont.appendChild(chk);
+  });
+}
+
+window.planTypChange=function(){
+  // nothing to hide/show currently, kept for future
+}
+
+window.savePlan=async function(){
+  const nazwa=$('plan-name').value.trim();
+  const czas=$('plan-time').value;
+  if(!nazwa||!czas){alert('Podaj godzinę i nazwę.');return;}
+  const editId=$('plan-edit-id').value;
+  const iso=$('plan-day-id').value||currentDayId;
+  showSync();
+  // collect checkboxes
+  const zastepy=[...$('plan-zastepy-list').querySelectorAll('input:checked')].map(i=>i.value);
+  const prowadzacy=[...$('plan-lead-list').querySelectorAll('input:checked')].map(i=>i.value);
+  const data={
+    data:iso, czas, nazwa,
+    typ:$('plan-typ').value,
+    zastepy, prowadzacy,
+    prowadzacyManual:$('plan-lead-manual').value.trim(),
+    opis:$('plan-desc').value.trim(),
+    done:editId?(state.aktywnosci[editId]?.done||false):false,
+    ts:Date.now()
+  };
+  if(editId) await update(ref(db,`aktywnosci/${editId}`),data);
+  else await push(ref(db,'aktywnosci'),data);
+  closeModal('m-plan');
+  addNotif('📅 Plan',`${editId?'Zmieniono':'Dodano'}: ${nazwa} o ${czas}`);
+}
+
+// ADD / EDIT DAY
+window.openAddDay=function(){
+  $('day-edit-id').value='';
+  $('day-data').value='';
+  $('day-typ').value='normalny';
+  $('day-nazwa').value='';
+  $('day-dest').value='';
+  $('day-uwagi').value='';
+  $('day-copy-from').innerHTML='<option value="">— zacznij od zera —</option>';
+  Object.entries(state.dni||{}).forEach(([did,d])=>{
+    $('day-copy-from').innerHTML+=`<option value="${did}">${d.data} · ${d.nazwa||DAY_TYPS[d.typ]?.label||d.typ}</option>`;
+  });
+  dayTypChange();
+  $('m-addday-title').textContent='📆 Nowy dzień';
+  openModal('m-addday');
+}
+
+window.openEditDay=function(iso){
+  const did=findDayIdByDate(iso);
+  const d=did?state.dni[did]:null;
+  $('day-edit-id').value=did||'';
+  $('day-data').value=iso;
+  $('day-typ').value=d?.typ||'normalny';
+  $('day-nazwa').value=d?.nazwa||'';
+  $('day-dest').value=d?.dest||'';
+  $('day-uwagi').value=d?.uwagi||'';
+  $('day-copy-from').innerHTML='<option value="">— nie kopiuj —</option>';
+  $('m-addday-title').textContent='✏️ Edytuj dzień';
+  dayTypChange();
+  openModal('m-addday');
+}
+
+window.openCopyDay=function(){
+  $('day-edit-id').value='';
+  // set next day as default date
+  const todayIso=currentDayId||new Date().toISOString().slice(0,10);
+  const next=new Date(todayIso+'T12:00:00');
+  next.setDate(next.getDate()+1);
+  $('day-data').value=next.toISOString().slice(0,10);
+  $('day-typ').value='normalny';
+  $('day-nazwa').value='';
+  $('day-dest').value='';
+  $('day-uwagi').value='';
+  $('day-copy-from').innerHTML='<option value="">— zacznij od zera —</option>';
+  Object.entries(state.dni||{}).forEach(([did,d])=>{
+    const selected=d.data===currentDayId?' selected':'';
+    $('day-copy-from').innerHTML+=`<option value="${did}"${selected}>${d.data} · ${d.nazwa||DAY_TYPS[d.typ]?.label||d.typ}</option>`;
+  });
+  dayTypChange();
+  $('m-addday-title').textContent='📋 Kopiuj dzień';
+  openModal('m-addday');
+}
+
+window.dayTypChange=function(){
+  const v=$('day-typ').value;
+  $('day-dest-wrap').style.display=v==='wycieczka'?'block':'none';
+}
+
+window.saveDay=async function(){
+  const iso=$('day-data').value;
+  if(!iso){alert('Wybierz datę.');return;}
+  showSync();
+  const editId=$('day-edit-id').value;
+  const data={
+    data:iso,
+    typ:$('day-typ').value,
+    nazwa:$('day-nazwa').value.trim(),
+    dest:$('day-dest').value.trim(),
+    uwagi:$('day-uwagi').value.trim(),
+    ts:Date.now()
+  };
+  let newDid;
+  if(editId){ await update(ref(db,`dni/${editId}`),data); newDid=editId; }
+  else { const r=await push(ref(db,'dni'),data); newDid=r.key; }
+
+  // copy activities if requested
+  const copyFrom=$('day-copy-from').value;
+  if(copyFrom && !editId){
+    const srcActs=Object.entries(state.aktywnosci||{}).filter(([,a])=>a.data===state.dni[copyFrom]?.data);
+    for(const [,a] of srcActs){
+      await push(ref(db,'aktywnosci'),{...a, data:iso, done:false, ts:Date.now()});
+    }
+  }
+
+  closeModal('m-addday');
+  currentDayId=iso;
+  addNotif('📆 Plan',`${editId?'Zmieniono':'Dodano'} dzień: ${iso}`);
+}
+
+// ── legacy deletePlan kept for compatibility ──
+window.deletePlan=async function(id){
+  if(!confirm('Usunąć?')) return;
+  showSync(); await remove(ref(db,`aktywnosci/${id}`)); closeModal('m-plan-detail');
 }
 
 // ── PRZYPOMNIENIA ──
